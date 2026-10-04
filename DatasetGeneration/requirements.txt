@@ -1,0 +1,11 @@
+pydantic
+fastapi
+uvicorn
+numpy
+pika
+pandas
+scikit-learn
+tqdm
+rstream
+matplotlib
+dotenv
