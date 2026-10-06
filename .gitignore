@@ -2,3 +2,4 @@
 hedera.md
 **/.env
 ReactorState/predictions.json
+**/node_modules
