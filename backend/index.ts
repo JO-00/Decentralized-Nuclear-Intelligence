@@ -8,7 +8,7 @@ app.use(express.json());
 type Entry = { owner_address: string; contract_address: string };
 
 const contracts: Entry[] = [
-    { owner_address: "0.0.10871818", contract_address: "0.0.10961608" }
+    { owner_address: "0.0.10871818", contract_address: "0.0.10971076" }
 ];
 
 app.get("/get_contracts", (req, res) => {

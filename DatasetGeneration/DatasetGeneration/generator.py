@@ -6,6 +6,8 @@ from CurveRandomGeneration import *
 
 def generate_functions(scenario: Scenario, breaches : list[Breach]) -> dict:
     assert isinstance(scenario, Scenario), "invalid scenario"
+    if breaches is None:
+        breaches = []
 
     _, perfect_power_t, noisy_power_t = call_power(scenario)
 

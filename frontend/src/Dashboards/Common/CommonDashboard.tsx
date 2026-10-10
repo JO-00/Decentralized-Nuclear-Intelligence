@@ -2,15 +2,15 @@ import { useState } from 'react';
 import { SystemOverviewCard } from './SystemOverview';
 import { ModelPage } from './ModelOverview';
 import { RequestsOverview } from './RequestsOverview';
-import { FetchIPFSCID } from './../../Components/Files/FetchModelFile';
+import { VotePage } from './../../Components/Files/FetchModelFile';
 
-type Tab = 'overview' | 'models' | 'requests' | 'ipfs';
+type Tab = 'overview' | 'models' | 'requests' | 'vote';
 
 const TABS: { id: Tab; label: string; hint: string; icon: string }[] = [
   { id: 'overview', label: 'Overview', hint: 'System state at a glance', icon: '◎' },
   { id: 'models', label: 'Models', hint: 'Registered ML models', icon: '◈' },
   { id: 'requests', label: 'Requests', hint: 'Inquirer activity', icon: '⇄' },
-  { id: 'ipfs', label: 'IPFS', hint: 'Fetch files by CID', icon: '⬡' },
+  { id: 'vote', label: 'Vote', hint: 'upvote/downvote a model or a logfile', icon: '⬡' },
 ];
 
 export function CommonDashboard() {
@@ -85,7 +85,7 @@ export function CommonDashboard() {
           {tab === 'overview' && <SystemOverviewCard />}
           {tab === 'models' && <ModelPage />}
           {tab === 'requests' && <RequestsOverview />}
-          {tab === 'ipfs' && <FetchIPFSCID />}
+          {tab === 'vote' && <VotePage />}
         </div>
       </section>
     </div>

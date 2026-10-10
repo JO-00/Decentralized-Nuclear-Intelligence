@@ -16,7 +16,9 @@ abstract contract Register is IRegister, BaseContract {
         _;
     }
 
-    function requestReactorState() external  payable returns (bool) {
+    
+
+    function requestReactorState() external payable returns (bool) {
         uint256 fee = this.RequestFee(); // Store in local variable to save gas
 
         require(
@@ -32,6 +34,22 @@ abstract contract Register is IRegister, BaseContract {
             uint256 excess = msg.value - fee;
             (bool success, ) = msg.sender.call{value: excess}("");
             require(success, "could not refund excess ETH");
+        }
+
+        // ---- Maintain recent_inquiries as a prepend queue ----
+        if (inquiryCount < 10) {
+            // Not full yet: shift filled slots right, prepend msg.sender
+            for (uint256 i = inquiryCount; i > 0; i--) {
+                recent_inquiries[i] = recent_inquiries[i - 1];
+            }
+            recent_inquiries[0] = msg.sender;
+            inquiryCount++;
+        } else {
+            // Full: shift all right (last is dropped), prepend msg.sender
+            for (uint256 i = 9; i > 0; i--) {
+                recent_inquiries[i] = recent_inquiries[i - 1];
+            }
+            recent_inquiries[0] = msg.sender;
         }
 
         // The exact 'fee' amount stays in address(this).balance (Treasury)

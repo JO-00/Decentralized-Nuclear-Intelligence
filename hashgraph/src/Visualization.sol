@@ -17,6 +17,13 @@ abstract contract Visualization is BaseContract, IVisualization {
             owner: owner
         });
     }
+    function getRecentInquiries() external view returns (address[] memory) {
+        address[] memory result = new address[](inquiryCount);
+        for (uint256 i = 0; i < inquiryCount; i++) {
+            result[i] = recent_inquiries[i];
+        }
+        return result;
+    }
 
     function isModelRegistered(address modelOwner) public view returns (bool) {
         return models[modelOwner].owner != address(0);
@@ -30,7 +37,7 @@ abstract contract Visualization is BaseContract, IVisualization {
         return ModelDetails({
             modelOwner: modelOwner,
             ipfsRef: exists ? m.ipfs_ref : "",
-            reputation: ModelReputations[modelOwner],
+            reputation: ModelReputations[modelOwner].length,
             reportCount: ModelReports[modelOwner].length,
             exists: exists
         });
@@ -49,7 +56,7 @@ abstract contract Visualization is BaseContract, IVisualization {
             batch[i] = ModelDetails({
                 modelOwner: ownerAddr,
                 ipfsRef: exists ? m.ipfs_ref : "",
-                reputation: ModelReputations[ownerAddr],
+                reputation: ModelReputations[ownerAddr].length,
                 reportCount: ModelReports[ownerAddr].length,
                 exists: exists
             });
@@ -99,12 +106,12 @@ abstract contract Visualization is BaseContract, IVisualization {
     }
 
     /// @notice Fetches multiple log file reputations in a single query for bulk table renders.
-    function getBatchLogFileReputations(string[] calldata hfsRefs) external view returns (uint256[] memory reputations) {
-        uint256 count = hfsRefs.length;
+    function getBatchLogFileReputations(string[] calldata ipfsRefs) external view returns (uint256[] memory reputations) {
+        uint256 count = ipfsRefs.length;
         reputations = new uint256[](count);
 
         for (uint256 i = 0; i < count; i++) {
-            reputations[i] = LogFileReputations[hfsRefs[i]];
+            reputations[i] = LogFileReputations[ipfsRefs[i]].length;
         }
         return reputations;
     }

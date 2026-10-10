@@ -1,8 +1,9 @@
-import { ContractFunctionParameters, ContractId, Hbar , ContractCallQuery, Client, TransactionResponse , ContractExecuteTransaction } from "@hiero-ledger/sdk";
+import { ContractFunctionParameters, ContractId, Hbar , ContractCallQuery, Transaction, Client, TransactionResponse , ContractExecuteTransaction } from "@hiero-ledger/sdk";
 import {ContractCall} from "./ContractCall"
 import { getContractIds } from "./api";
 import { Signer } from "@hiero-ledger/sdk";
 import { ContractViewer } from "./ContractViewer";
+import { IpfsRepository } from "./IPFS";
 
 
 export class ContractModify{
@@ -127,6 +128,124 @@ export class ContractModify{
 
         return receipt;
     }
+static async VoteLogFile(
+  signer: Signer,
+  vote: number,
+  inquirer: string,
+  ipfs_ref: string
+) {
+  const contract_id: ContractId =
+    await ContractModify.require_contract_id();
+
+  if (!(await IpfsRepository.assertCidExists(ipfs_ref))) {
+    throw new Error("file with associated ipfs doesn't exist");
+  }
+
+  const address = await ContractViewer.getEvmAddress(inquirer);
+
+  const functionName =
+    vote === 1
+      ? "upvote_logfile"
+      : vote === -1
+        ? "downvote_logfile"
+        : (() => {
+            throw new Error("invalid vote");
+          })();
+
+  const transaction = new ContractExecuteTransaction()
+    .setContractId(contract_id)
+    .setFunction(
+      functionName,
+      new ContractFunctionParameters()
+        .addAddress(address)
+        .addString(ipfs_ref)
+    )
+    .setGas(1_000_000);
+
+  const response: TransactionResponse =
+    await transaction.executeWithSigner(signer);
+
+  console.log("Transaction ID:", response.transactionId.toString());
+
+  const receipt = await response.getReceipt(Client.forTestnet());
+
+  console.log("Transaction status:", receipt.status.toString());
+
+  return receipt;
+}
+
+
+
+static async VoteModelFile(
+  signer: Signer,
+  vote: number,
+  model_owner: string
+) {
+  const contract_id: ContractId =
+    await ContractModify.require_contract_id();
+
+  const address = await ContractViewer.getEvmAddress(model_owner);
+
+  const functionName =
+    vote === 1
+      ? "upvote_model"
+      : vote === -1
+        ? "downvote_model"
+        : (() => {
+            throw new Error("invalid vote");
+          })();
+
+  const transaction = new ContractExecuteTransaction()
+    .setContractId(contract_id)
+    .setFunction(
+      functionName,
+      new ContractFunctionParameters().addAddress(address)
+    )
+    .setGas(1_000_000);
+
+  const response: TransactionResponse =
+    await transaction.executeWithSigner(signer);
+
+  console.log("Transaction ID:", response.transactionId.toString());
+
+  const receipt = await response.getReceipt(Client.forTestnet());
+
+  console.log("Transaction status:", receipt.status.toString());
+
+  return receipt;
+}
+static async handleResponse(
+      signer : Signer |null,
+      inquirer: string,
+      ipfsRef: string
+    ): Promise<void> {
+      if (!IpfsRepository.assertCidExists(ipfsRef)) throw new Error("invalid ipfs ref");
+      if (!signer) throw new Error("could't connect to wallet");
+        const contract_id: ContractId =
+    await ContractModify.require_contract_id();
+
+  const address = await ContractViewer.getEvmAddress(inquirer);
+
+  
+  const transaction = new ContractExecuteTransaction()
+    .setContractId(contract_id)
+    .setFunction(
+      "submitLogFile",
+      new ContractFunctionParameters().addAddress(address).addString(ipfsRef)
+    )
+    .setGas(1_000_000);
+
+  const response: TransactionResponse =
+    await transaction.executeWithSigner(signer);
+
+  console.log("Transaction ID:", response.transactionId.toString());
+
+  const receipt = await response.getReceipt(Client.forTestnet());
+
+  console.log("Transaction status:", receipt.status.toString());
+
+    }
+
 
 
     

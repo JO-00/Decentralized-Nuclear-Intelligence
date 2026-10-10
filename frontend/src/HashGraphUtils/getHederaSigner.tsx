@@ -6,7 +6,7 @@ import { LedgerId,Signer } from "@hiero-ledger/sdk";
 const WALLETCONNECT_PROJECT_ID : string | undefined = import.meta.env.VITE_PROJECT_ID;
 console.log(WALLETCONNECT_PROJECT_ID)
 
-if (typeof WALLETCONNECT_PROJECT_ID == "undefined") throw new Error("project id not loaded");
+// if (typeof WALLETCONNECT_PROJECT_ID == "undefined") throw new Error("project id not loaded");
 
 const metadata = {
     name: "React Topic App",

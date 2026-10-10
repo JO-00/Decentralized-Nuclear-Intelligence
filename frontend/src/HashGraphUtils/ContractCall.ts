@@ -9,6 +9,7 @@ import { BigNumber } from "bignumber.js";
 import { AbiCoder, JsonRpcProvider, Interface } from "ethers";
 import { getContractIds } from "./api";
 import {ContractViewer} from "./ContractViewer";
+import { IpfsRepository } from "./IPFS";
 
 // ==========================================
 // Mirror / JSON-RPC plumbing
@@ -125,6 +126,29 @@ export class ContractCall {
     } as SystemOverview;
   }
 
+  static async handleFetchRecentRequests() {
+    const raw = await callMirrorNode(
+      await ContractCall.require_contract_id(),
+      "getRecentInquiries",
+      [],
+      []
+    );
+    const coder = AbiCoder.defaultAbiCoder();
+    const [decoded] = coder.decode(["address[]"], raw);
+
+    const profiles = await Promise.all(
+      (decoded as string[]).map(async (address) => {
+        const profile = await ContractCall.getInquirerFullProfile(address);
+        return {
+          ...profile,
+          inquirer: address,
+        };
+      })
+    );
+
+    return profiles;
+  }
+
   // ==========================================
   // 2. MODEL LOOKUPS
   // ==========================================
@@ -213,7 +237,7 @@ static async getModelFullDetails(model_owner: string): Promise<ModelDetails> {
     } as InquirerDetails;
   }
 
-  static async getPaginatedInquirerRequests(
+  static async getPaginatedInquirerResponses(
     inquirer: string,
     offset: number,
     limit: number,
@@ -270,7 +294,7 @@ static async getModelFullDetails(model_owner: string): Promise<ModelDetails> {
 
     const [model_reports , total] = AbiCoder.defaultAbiCoder().decode(
       [
-        "tuple(address inquirer, string hfs_ref_report)",
+        "tuple(address inquirer, string hfs_ref_report)[]",
         "uint256"
     ] , raw
     )
@@ -373,4 +397,42 @@ static async getModelFullDetails(model_owner: string): Promise<ModelDetails> {
       hfs_ref_report: r.hfs_ref_report,
     }));
   }
+
+  static async getModelReputation(model_owner: string) {
+    const raw = await callMirrorNode(
+      await ContractCall.require_contract_id(),
+      "getModelFullDetails",
+      ["address"],
+      [await ContractViewer.getEvmAddress(model_owner)],
+    );
+
+    const [details] = AbiCoder.defaultAbiCoder().decode(
+      ["tuple(address modelOwner,string ipfsRef,uint256 reputation,uint256 reportCount,bool exists)"],
+      raw,
+    );
+
+    return Number(details.reputation);
+  }
+  static async getLogFileReputation(ipfs_ref: string) {
+    if (!await IpfsRepository.assertCidExists(ipfs_ref)) {
+      throw new Error("invalid ipfs ref");
+    }
+
+    const raw = await callMirrorNode(
+      await ContractCall.require_contract_id(),
+      "getBatchLogFileReputations",
+      ["string[]"],
+      [[ipfs_ref]],
+    );
+
+    const [reputations] = AbiCoder.defaultAbiCoder().decode(
+      ["uint256[]"],
+      raw,
+    );
+
+    return Number(reputations[0]);
+  }
+  
+
+
 }

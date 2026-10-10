@@ -18,11 +18,14 @@ abstract contract BaseContract{
 
     mapping(address => model) public models;
     
-    mapping(address => uint256) public ModelReputations; //the address is the owner of the model
+    mapping(address => address[]) public ModelReputations; //the address is the owner of the model, the list of addresses is whoever upvoted
 
-    mapping(string => uint256) public LogFileReputations;
+    mapping(string => address[]) public LogFileReputations; // the list of addresses is also whoever upvoted
 
     mapping(address => ModelReport[]) public ModelReports;
+
+    address[10] public recent_inquiries;
+    uint256 public inquiryCount;
 
 
     constructor(uint256 request_fee , uint256 model_fee){

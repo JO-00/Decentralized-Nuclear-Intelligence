@@ -28,39 +28,67 @@ abstract contract Voting is BaseContract , IVoting{
         }
         return (false, 0); // Not found
     }
+    modifier model_vote_not_exist(address model_owner){
+        for (uint256 i = 0 ; i < ModelReputations[model_owner].length ; i++){
+            if (model_owner == ModelReputations[model_owner][i]) revert ("vote already exists");
+        }
+        _;
+    }
 
-    function upvote_model(address model_owner) model_exists(model_owner) public {
-        ModelReputations[model_owner] += 1;
+    function upvote_model(address model_owner) model_exists(model_owner) public model_vote_not_exist(model_owner ) {
+        ModelReputations[model_owner].push(msg.sender);
     }
     function downvote_model(address model_owner) model_exists(model_owner) public {
-        require(ModelReputations[model_owner] > 0 , "model cannot be downvoted");
-        ModelReputations[model_owner] -= 1;
+        address[] storage voters = ModelReputations[model_owner];
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            if (voters[i] == msg.sender) {
+                voters[i] = voters[voters.length - 1];
+                voters.pop();
+                return;
+            }
+        }
+
+        revert("you have not upvoted this model");
     }
 
-    function upvote_logfile (address inquirer , string memory hfs_ref) public {
+        function upvote_logfile(address inquirer, string memory hfs_ref) public {
         bool result;
         uint256 index;
-        (result , index) = getLogfileIndex(inquirer, hfs_ref);
-        require(result , string.concat(
+        (result, index) = getLogfileIndex(inquirer, hfs_ref);
+        require(result, string.concat(
             "didnt find log file with HFS ref = ",
             hfs_ref
         ));
 
-        LogFileReputations[hfs_ref] += 1;
-        
+        address[] storage voters = LogFileReputations[hfs_ref];
+        for (uint256 i = 0; i < voters.length; i++) {
+            if (voters[i] == msg.sender) revert("vote already exists");
+        }
+
+        voters.push(msg.sender);
     }
-    function downvote_logfile (address inquirer , string memory hfs_ref) public {
+
+    function downvote_logfile(address inquirer, string memory hfs_ref) public {
         bool result;
         uint256 index;
-        (result , index) = getLogfileIndex(inquirer, hfs_ref);
-        require(result , string.concat(
+        (result, index) = getLogfileIndex(inquirer, hfs_ref);
+        require(result, string.concat(
             "didnt find log file with HFS ref = ",
             hfs_ref
         ));
 
-        require(LogFileReputations[hfs_ref] > 0 , "cannot downvote the file");
+        address[] storage voters = LogFileReputations[hfs_ref];
 
-        LogFileReputations[hfs_ref] -= 1;
+        for (uint256 i = 0; i < voters.length; i++) {
+            if (voters[i] == msg.sender) {
+                voters[i] = voters[voters.length - 1];
+                voters.pop();
+                return;
+            }
+        }
+
+        revert("you have not upvoted this logfile");
     }
 
 }
