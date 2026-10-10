@@ -10,7 +10,7 @@ import {
 } from "@hiero-ledger/sdk";
 import {SaveContractId} from "./../../HashGraphUtils/api"
 
-import { bytecode } from "../../../../hashgraph/out/Entry.sol/Entry.json";
+import { bytecode } from "./../../HashGraphUtils/Entry.json";
 
 // Helper: Get Public Key from Mirror Node
 async function getAccountPublicKey(accountIdStr: string): Promise<PublicKey> {

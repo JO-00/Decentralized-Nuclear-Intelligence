@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import YourContractABI from "./../../../hashgraph/out/Entry.sol/Entry.json"
+import YourContractABI from "./Entry.json"
 import { ContractViewer } from "./ContractViewer";
 const provider = new ethers.JsonRpcProvider(
   "https://testnet.hashio.io/api"

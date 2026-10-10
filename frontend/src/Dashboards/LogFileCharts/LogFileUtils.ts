@@ -5,7 +5,7 @@ import {
   type LogFileVariable,
   type ValidationResult,
 } from './types';
-import { VARIABLE_META } from './variableMeta';
+import { VARIABLE_META } from './VariableMeta';
 
 const ALLOWED = new Set<string>(LOG_FILE_VARIABLES);
 

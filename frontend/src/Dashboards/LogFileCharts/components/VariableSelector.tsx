@@ -1,5 +1,5 @@
 import { LOG_FILE_VARIABLES, type LogFileVariable } from '../types';
-import { VARIABLE_META } from '../variableMeta';
+import { VARIABLE_META } from '../VariableMeta';
 
 interface Props {
   value: LogFileVariable;

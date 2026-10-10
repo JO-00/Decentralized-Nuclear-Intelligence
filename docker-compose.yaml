@@ -2,7 +2,7 @@ services:
   dataset-generation:
     build: DatasetGeneration/
     ports:
-      - "8001:8000"
+      - "8000:8000"
     env_file:
       - DatasetGeneration/.env
     environment:
@@ -11,48 +11,21 @@ services:
       DATASET_OUTPUT_DIR: /tmp
     
     container_name: dataset_generation
-    command: python communication.py
-    depends_on:
-      rabbit_mq:
-        condition: service_healthy
+    command: uvicorn endpoint:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test : ["CMD" , "curl", "localhost:8000/health"]
+      interval : 30s
+      timeout : 10s
+      retries : 3
+      
     
 
-  reactor-state:
-    build: ReactorState/
-    ports:
-      - "8002:8000"
-    container_name: reactor_state
-    depends_on:
-      dataset-generation:
-        condition: service_started
-      rabbit_mq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    command: uvicorn server:app --host 0.0.0.0 --port 8000
-    env_file:
-      - ReactorState/.env
 
-  rabbit_mq:
-    image: rabbitmq:4-management
+  frontend:
+    build : frontend\
     ports:
-      - "5552:5552"   # stream
-      - "5672:5672"   # amqp
-      - "15672:15672" # management UI
-    environment:
-      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbitmq_stream advertised_host rabbit_mq"
-    volumes:
-      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      - "5173:80"
+    restart : unless-stopped
 
 
 volumes:

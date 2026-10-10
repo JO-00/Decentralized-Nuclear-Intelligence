@@ -15,44 +15,97 @@ const inputClass =
   "focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 " +
   "disabled:cursor-not-allowed disabled:opacity-60";
 
-const smallInputClass =
-  "w-24 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm " +
-  "text-slate-100 shadow-sm transition " +
-  "focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30";
+// Hardcoded — mirrors SCENARIOS on the backend.
+const ALL_SCENARIOS = [
+  "nominal",
+  // single events
+  "power_increase",
+  "power_decrease",
+  "control_rod_insertion",
+  "control_rod_withdrawal",
+  "pump_start",
+  "pump_trip",
+  "temperature_elevation",
+  "pressure_increase",
+  "pressure_decrease",
+  // coherent multi-events
+  "power_increase_with_rod_withdrawal",
+  "power_increase_with_pump_start",
+  "power_decrease_with_rod_insertion",
+  "power_increase_with_pump_trip",
+  "power_decrease_with_pump_start",
+  "temperature_elevation_with_power_increase",
+  "pressure_increase_with_temperature_elevation",
+  "pressure_decrease_with_power_decrease",
+  "reactor_scram",
+  "power_increase_with_rod_withdrawal_and_pump_start",
+  "power_decrease_with_rod_insertion_and_pump_trip",
+  "power_increase_with_temperature_elevation_and_pressure_increase",
+  "power_decrease_with_temperature_elevation_and_pressure_decrease",
+  "power_increase_with_pump_start_temperature_elevation",
+  "power_increase_with_pump_start_temperature_elevation_pressure_increase",
+  "power_increase_with_rod_withdrawal_temperature_elevation",
+  "power_increase_with_rod_withdrawal_temperature_elevation_pressure_increase",
+  "power_decrease_with_rod_insertion_pump_start",
+  "power_decrease_with_rod_insertion_pump_start_temperature_decrease",
+  "power_increase_pump_start_temperature_elevation_rod_withdrawal",
+  "power_decrease_pump_trip_temperature_elevation_pressure_increase",
+  "long_coherent_operation",
+];
+
+const scrollAreaClass = `
+  max-h-80 overflow-y-auto pr-2
+  [scrollbar-width:thin]
+  [scrollbar-color:theme(colors.slate.700)_transparent]
+  hover:[scrollbar-color:theme(colors.slate.600)_transparent]
+  [&::-webkit-scrollbar]:w-2
+  [&::-webkit-scrollbar-track]:bg-transparent
+  [&::-webkit-scrollbar-thumb]:rounded-full
+  [&::-webkit-scrollbar-thumb]:bg-slate-700
+  [&::-webkit-scrollbar-thumb:hover]:bg-slate-600
+`;
 
 export function GenerateDataset() {
-  const API = import.meta.env.VITE_DATASET_API;
+  const API = import.meta.env.VITE_BACKEND_URL;
 
   const [nSamples, setNSamples] = useState(500);
   const [seed, setSeed] = useState(42);
-  const [fractions, setFractions] = useState({
-    nominal: 0.2,
-    power_increase: 0.2,
-    power_increase_with_rod_withdrawal: 0.3,
-    reactor_scram: 0.3,
-  });
-  const [status, setStatus] = useState(null); // null | "loading" | "ok" | "error"
+  const [weights, setWeights] = useState<Record<string, number>>(() =>
+    Object.fromEntries(ALL_SCENARIOS.map((n) => [n, 0]))
+  );
+  const [status, setStatus] = useState<null | "loading" | "ok" | "error">(null);
   const [message, setMessage] = useState("");
 
-  const sum = Object.values(fractions).reduce((a, b) => a + b, 0);
-  const sumOk = Math.abs(sum - 1) < 1e-6;
+  const usedTotal = Object.values(weights).reduce((a, b) => a + b, 0);
+  const remaining = 100 - usedTotal;
+  const sumOk = remaining === 0;
 
-  function updateFraction(name, value) {
-    setFractions((f) => ({ ...f, [name]: value }));
-  }
-
-  function addRow() {
-    const name = window.prompt("Scenario name (exact, e.g. power_decrease):");
-    if (!name) return;
-    if (name in fractions) return alert("Already added.");
-    setFractions((f) => ({ ...f, [name]: 0 }));
-  }
-
-  function removeRow(name) {
-    setFractions((f) => {
-      const { [name]: _, ...rest } = f;
-      return rest;
+  function setWeightAt(name: string, value: number) {
+    setWeights((prev) => {
+      const othersSum = Object.entries(prev).reduce(
+        (s, [k, v]) => (k === name ? s : s + v),
+        0
+      );
+      const max = Math.max(0, 100 - othersSum);
+      const clamped = Math.min(Math.max(0, value), max);
+      return { ...prev, [name]: clamped };
     });
+  }
+
+  function reset() {
+    setWeights(Object.fromEntries(ALL_SCENARIOS.map((n) => [n, 0])));
+  }
+
+  function distributeEvenly() {
+    const active = Object.keys(weights).length;
+    if (active === 0) return;
+    const base = Math.floor(100 / active);
+    const leftover = 100 - base * active;
+    const next: Record<string, number> = {};
+    ALL_SCENARIOS.forEach((n, i) => {
+      next[n] = base + (i < leftover ? 1 : 0);
+    });
+    setWeights(next);
   }
 
   async function handleGenerate() {
@@ -61,15 +114,23 @@ export function GenerateDataset() {
 
     if (!sumOk) {
       setStatus("error");
-      setMessage(`Fractions must sum to 1.0 (currently ${sum.toFixed(4)}).`);
+      setMessage(
+        `Weights must sum to 100% (currently ${usedTotal}%). ${remaining}% remaining.`
+      );
       return;
     }
+
+    const fractions = Object.fromEntries(
+      Object.entries(weights)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => [k, v / 100])
+    );
 
     const filePath = `dataset_${Date.now()}_${Math.random()
       .toString(36)
       .slice(2, 8)}.csv`;
 
-    let blobUrl = null;
+    let blobUrl: string | null = null;
 
     try {
       const res = await fetch(`${API}/generate`, {
@@ -101,7 +162,7 @@ export function GenerateDataset() {
       setMessage(`Downloaded ${filePath}`);
     } catch (err) {
       setStatus("error");
-      setMessage(err.message);
+      setMessage(err instanceof Error ? err.message : String(err));
     } finally {
       if (blobUrl) {
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
@@ -111,11 +172,9 @@ export function GenerateDataset() {
 
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
-      {/* subtle radial glow behind the card */}
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(99,102,241,0.15),_transparent_60%)]" />
 
       <div className="relative mx-auto w-full max-w-2xl">
-        {/* Card */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 shadow-2xl shadow-black/40 backdrop-blur">
           {/* Header */}
           <div className="border-b border-slate-800 px-6 py-5">
@@ -123,13 +182,13 @@ export function GenerateDataset() {
               Dataset Generator
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Configure scenario distribution and download the generated CSV.
+              Distribute scenario weights and download the generated CSV.
             </p>
           </div>
 
           {/* Body */}
           <div className="space-y-6 px-6 py-6">
-            {/* Top row: n_samples + seed */}
+            {/* Top row */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-300">
@@ -139,7 +198,7 @@ export function GenerateDataset() {
                   type="number"
                   min={1}
                   value={nSamples}
-                  onChange={(e) => setNSamples(e.target.value)}
+                  onChange={(e) => setNSamples(Number(e.target.value))}
                   className={inputClass}
                 />
               </div>
@@ -151,87 +210,89 @@ export function GenerateDataset() {
                 <input
                   type="number"
                   value={seed}
-                  onChange={(e) => setSeed(e.target.value)}
+                  onChange={(e) => setSeed(Number(e.target.value))}
                   className={inputClass}
                 />
               </div>
             </div>
 
-            {/* Fractions */}
+            {/* Weight allocation */}
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-slate-200">
-                  Scenario fractions
+                  Scenario weights
                 </h2>
-                <span
-                  className={
-                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 " +
-                    (sumOk
-                      ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/30"
-                      : "bg-rose-500/10 text-rose-400 ring-rose-500/30")
-                  }
-                >
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={distributeEvenly}
+                    className="rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                  >
+                    Even
+                  </button>
                   <span
                     className={
-                      "h-1.5 w-1.5 rounded-full " +
-                      (sumOk ? "bg-emerald-400" : "bg-rose-400")
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 " +
+                      (sumOk
+                        ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/30"
+                        : "bg-amber-500/10 text-amber-400 ring-amber-500/30")
                     }
-                  />
-                  sum = {sum.toFixed(4)}
-                </span>
+                  >
+                    <span
+                      className={
+                        "h-1.5 w-1.5 rounded-full " +
+                        (sumOk ? "bg-emerald-400" : "bg-amber-400")
+                      }
+                    />
+                    {usedTotal} / 100
+                  </span>
+                </div>
               </div>
 
-              <ul className="space-y-2">
-                {Object.entries(fractions).map(([name, value]) => (
-                  <li
-                    key={name}
-                    className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2"
-                  >
-                    <span className="flex-1 truncate font-mono text-sm text-slate-300">
-                      {name}
-                    </span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="1"
-                      value={value}
-                      onChange={(e) =>
-                        updateFraction(name, Number(e.target.value))
-                      }
-                      className={smallInputClass}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeRow(name)}
-                      className="rounded-md p-1.5 text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-400"
-                      aria-label={`Remove ${name}`}
+              <ul className={`space-y-2 ${scrollAreaClass}`}>
+                {ALL_SCENARIOS.map((name) => {
+                  const value = weights[name] ?? 0;
+                  const othersSum = usedTotal - value;
+                  const max = Math.max(0, 100 - othersSum);
+                  return (
+                    <li
+                      key={name}
+                      className="flex items-center gap-4 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        className="h-4 w-4"
+                      <span
+                        className="w-56 shrink-0 truncate font-mono text-xs text-slate-300"
+                        title={name}
                       >
-                        <path
-                          fillRule="evenodd"
-                          d="M8.75 1A2.75 2.75 0 006 3.75V4H3.75a.75.75 0 000 1.5h.3l.815 10.6A2.75 2.75 0 007.605 18.5h4.79a2.75 2.75 0 002.74-2.4l.815-10.6h.3a.75.75 0 000-1.5H14V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4h1.5V3.75a1.25 1.25 0 00-1.25-1.25h-2.5A1.25 1.25 0 006.5 3.75V4H10zm-2.5 3a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0v-6A.75.75 0 017.5 7zm5.75.75a.75.75 0 00-1.5 0v6a.75.75 0 001.5 0v-6z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                        {name}
+                      </span>
 
-              <button
-                type="button"
-                onClick={addRow}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-400 transition hover:border-indigo-500 hover:text-indigo-400"
-              >
-                <span className="text-base leading-none">+</span>
-                Add scenario
-              </button>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={value}
+                        onChange={(e) =>
+                          setWeightAt(name, Number(e.target.value))
+                        }
+                        className="flex-1 accent-indigo-500"
+                      />
+
+                      <span className="w-10 shrink-0 text-right font-mono text-xs text-slate-400">
+                        {value}%
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
 
             {/* Submit */}
@@ -271,7 +332,7 @@ export function GenerateDataset() {
               {status === "loading" ? "Generating…" : "Generate & Download"}
             </button>
 
-            {/* Status message */}
+            {/* Status */}
             {message && (
               <div
                 className={
@@ -292,12 +353,6 @@ export function GenerateDataset() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-500">
-          Requests are sent to{" "}
-          <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-slate-400">
-            {API}
-          </code>
-        </p>
       </div>
     </div>
   );

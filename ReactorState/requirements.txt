@@ -1,9 +1,0 @@
-rstream
-pydantic
-fastapi
-uvicorn
-dotenv
-joblib
-numpy
-pandas
-scikit-learn

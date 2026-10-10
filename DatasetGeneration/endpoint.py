@@ -148,3 +148,47 @@ def generate(req: GenerateRequest):
             "X-Col-Count": str(len(COLUMNS)),
         },
     )
+
+@app.get("/scenarios")
+def scenarios():
+    return {"scenarios": sorted(valid_scenario_names())}
+
+
+# ---------------------------------------------------------------------------
+# Contract registry endpoints (ported from the Express/TypeScript service)
+# ---------------------------------------------------------------------------
+
+class ContractEntry(BaseModel):
+    owner_address: str
+    contract_address: str
+
+
+class SaveContractRequest(BaseModel):
+    owner: str
+    contract: str
+
+
+contracts: list[ContractEntry] = [
+    ContractEntry(owner_address="0.0.10871818", contract_address="0.0.10971076"),
+]
+
+
+@app.get("/get_contracts")
+def get_contracts():
+    return contracts
+
+
+@app.post("/save_contract")
+def save_contract(req: SaveContractRequest):
+    if not req.owner or not req.contract:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="owner and contract required")
+
+    contracts.append(ContractEntry(owner_address=req.owner, contract_address=req.contract))
+    return True
+
+
+
+@app.get("/health")
+def healthcheck():
+    return {"status" : "ok"}
