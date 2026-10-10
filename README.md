@@ -1,18 +1,23 @@
-## AS AN MVP
-
-copy the .env files
-```bash
-cp DatasetGeneration/.env.example DatasetGeneration/.env
-cp ReactorState/.env.example ReactorState/.env
-
-
-```
-
-
 just run
 ```bash
-docker compose up --build
+cd backend
+tsx index.ts
+```
+```bash
+cd frontend
+npm run dev
 ```
 
-or test the other services with dataset generation
+DatasetGeneration helps users to generate a dataset, they select the distribution of features
 
+example:
+
+20% power increase
+
+10% pressure increase
+
+etc
+
+and then they receive a csv to train on
+
+To compare log files, you have 3 files at DatasetGeneration\logs\generated, upload all three

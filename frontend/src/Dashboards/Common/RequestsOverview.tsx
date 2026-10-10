@@ -76,63 +76,106 @@ export function RequestsOverview() {
   };
 
   return (
-    <div>
-      <h2>Requests Overview</h2>
+    <div className="mx-auto max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-lg">
+      <h2 className="mb-4 text-2xl font-semibold text-slate-100">
+        Requests Overview
+      </h2>
 
-      <input
-        value={address}
-        onChange={(e) => setAddress(e.target.value)}
-        placeholder="Inquirer address"
-      />
-      <button onClick={handleFetchProfile} disabled={!address || loadingProfile}>
-        {loadingProfile ? 'Loading…' : 'Fetch Inquirer'}
-      </button>
+      <div className="flex gap-2">
+        <input
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          placeholder="Inquirer address"
+          className="flex-1 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40"
+        />
+        <button
+          onClick={handleFetchProfile}
+          disabled={!address || loadingProfile}
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+        >
+          {loadingProfile ? 'Loading…' : 'Fetch Inquirer'}
+        </button>
+      </div>
 
-      {profileError && <p>Error: {profileError}</p>}
+      {profileError && (
+        <p className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          Error: {profileError}
+        </p>
+      )}
 
       {profile && (
-        <div>
-          <p>Inquirer: {profile.inquirer}</p>
-          <p>Total requests: {profile.totalRequests.toString()}</p>
-          <p>Has active request: {profile.hasActiveRequest ? 'yes' : 'no'}</p>
-          <p>Log files: {profile.logFiles.length}</p>
+        <div className="mt-4 space-y-1 rounded-md border border-slate-700 bg-slate-800/60 p-4 text-sm text-slate-300">
+          <p>
+            <span className="font-medium text-slate-100">Inquirer:</span>{' '}
+            <span className="break-all font-mono text-xs text-slate-200">
+              {profile.inquirer}
+            </span>
+          </p>
+          <p>
+            <span className="font-medium text-slate-100">Total requests:</span>{' '}
+            {profile.totalRequests.toString()}
+          </p>
+          <p>
+            <span className="font-medium text-slate-100">Has active request:</span>{' '}
+            <span
+              className={
+                profile.hasActiveRequest
+                  ? 'font-medium text-amber-400'
+                  : 'font-medium text-emerald-400'
+              }
+            >
+              {profile.hasActiveRequest ? 'yes' : 'no'}
+            </span>
+          </p>
+          <p>
+            <span className="font-medium text-slate-100">Log files:</span>{' '}
+            {profile.logFiles.length}
+          </p>
 
-          <button onClick={handleFetchRequests} disabled={loadingRequests}>
+          <button
+            onClick={handleFetchRequests}
+            disabled={loadingRequests}
+            className="mt-3 rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+          >
             {loadingRequests && requests.length === 0 ? 'Loading…' : 'Get Requests'}
           </button>
         </div>
       )}
 
-      {requestsError && <p>Error: {requestsError}</p>}
+      {requestsError && (
+        <p className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          Error: {requestsError}
+        </p>
+      )}
 
       {requests.length > 0 && (
         <>
-          <div
-            style={{
-              maxHeight: 300,
-              overflowY: 'auto',
-              border: '1px solid #ccc',
-              marginTop: 12,
-            }}
-          >
-            <ul>
+          <div className="mt-3 max-h-[300px] overflow-y-auto rounded-md border border-slate-700 bg-slate-800/40">
+            <ul className="divide-y divide-slate-700/60">
               {requests.map((ref, i) => (
-                <li key={i}>{ref}</li>
+                <li
+                  key={i}
+                  className="break-all px-3 py-2 font-mono text-xs text-slate-300 transition hover:bg-slate-700/40"
+                >
+                  {ref}
+                </li>
               ))}
             </ul>
           </div>
 
-          <button
-            onClick={handleFetchMore}
-            disabled={loadingRequests || requests.length >= total}
-          >
-            {loadingRequests ? 'Loading…' : '+5'}
-          </button>
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              onClick={handleFetchMore}
+              disabled={loadingRequests || requests.length >= total}
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+            >
+              {loadingRequests ? 'Loading…' : '+5'}
+            </button>
 
-          <span>
-            {' '}
-            {requests.length} / {total}
-          </span>
+            <span className="text-sm text-slate-400">
+              {requests.length} / {total}
+            </span>
+          </div>
         </>
       )}
     </div>

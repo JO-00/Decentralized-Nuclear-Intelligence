@@ -28,16 +28,16 @@ export function HederaWalletConnect() {
     const [isConnected, setIsConnected] = useState<boolean>(false);
 
     useEffect(() => {
-        // Initialize DAppConnector on mount
-        dAppConnector.init().then(() => {
-            if (dAppConnector.signers.length > 0) {
-                const activeSigner : DAppSigner = dAppConnector.signers[0];
-                if (activeSigner == null) throw new Error("active signer issue")
-                setSigner(activeSigner);
-                setAccountId(activeSigner.getAccountId().toString());
-                setIsConnected(true);
-            }
-        }).catch(err => console.error("DAppConnector init failed:", err));
+dAppConnector.init().then(() => {
+    if (dAppConnector.signers.length > 0) {
+        const activeSigner : DAppSigner = dAppConnector.signers[0];
+        if (activeSigner) {  // ← no throw, just check
+            setSigner(activeSigner);
+            setAccountId(activeSigner.getAccountId().toString());
+            setIsConnected(true);
+        }
+    }
+}).catch(err => console.error("DAppConnector init failed:", err));
     }, []);
 
     const connect = async () => {

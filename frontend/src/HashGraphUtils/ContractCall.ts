@@ -1,4 +1,4 @@
-import { ContractFunctionParameters, EvmAddress, ContractId, ContractFunctionResult } from "@hiero-ledger/sdk";
+import { ContractFunctionParameters, EvmAddress, ContractId, ContractFunctionResult, AccountId  , Signer} from "@hiero-ledger/sdk";
 import {
   SystemOverview,
   ModelDetails,
@@ -8,6 +8,7 @@ import {
 import { BigNumber } from "bignumber.js";
 import { AbiCoder, JsonRpcProvider, Interface } from "ethers";
 import { getContractIds } from "./api";
+import {ContractViewer} from "./ContractViewer";
 
 // ==========================================
 // Mirror / JSON-RPC plumbing
@@ -36,40 +37,31 @@ function getProvider(): JsonRpcProvider {
 async function callMirrorNode(
   contractId: ContractId,
   functionName: string,
-  params: ContractFunctionParameters,
+  inputTypes: string[],
+  args: unknown[],
 ): Promise<string> {
-  const iface = new Interface([
-    // We don't know the exact ABI here, but ethers only needs the selector.
-    // Building a minimal ABI per call is annoying, so we use the low-level
-    // approach below instead.
-  ]);
-
-  // Use ContractFunctionParameters' own encoder to build the calldata.
-  // _buildParams is private but the SDK stores the encoded bytes on the object.
-  const encodedParams = (params as any)._buildParams?.() ?? "0x";
-  const selector = new Interface([
-    `function ${functionName}()`,
-  ]).getFunction(functionName)!.selector;
-
-  // If there are parameters, we need the real signature. Build it from the
-  // SDK's own encoding: selector + encoded params.
-  // For zero-arg functions, selector alone is correct.
-  const data = encodedParams === "0x"
-    ? selector
-    : selector + encodedParams.slice(2);
-
   const evmAddress = "0x" + contractId.toSolidityAddress();
 
-  const result: string = await getProvider().send("eth_call", [
+  const signature =
+    "function " + functionName + "(" + inputTypes.join(",") + ")";
+  const iface = new Interface([signature]);
+
+  const data = iface.encodeFunctionData(functionName, args);
+
+  return await getProvider().send("eth_call", [
     {
       to: evmAddress,
-      data,
+      data: data,
     },
     "latest",
   ]);
-
-  return result;
 }
+
+
+
+
+
+
 
 export class ContractCall {
   /**
@@ -93,6 +85,21 @@ export class ContractCall {
     return ContractCall.contractId;
   }
 
+  static async isOracle(signer : Signer) {
+    const client_id : AccountId = signer.getAccountId()
+    const raw = await callMirrorNode(
+      await this.require_contract_id(),
+      "isOracle",
+      ["address"],
+      [await ContractViewer.getEvmAddress(client_id.toString())]
+    )
+    const [res] = AbiCoder.defaultAbiCoder().decode(
+      ["bool"],
+      raw
+    );
+    return res
+  }
+
   // ==========================================
   // 1. SYSTEM OVERVIEW
   // ==========================================
@@ -101,20 +108,20 @@ export class ContractCall {
     const raw = await callMirrorNode(
       await ContractCall.require_contract_id(),
       "getSystemOverview",
-      new ContractFunctionParameters(),
+      [],
+      []
     );
 
     const coder = AbiCoder.defaultAbiCoder();
-    const [totalOracles, requestFee, modelProposalFee, owner] = coder.decode(
+    const [totalOracles, requestFee, modelProposalFee] = coder.decode(
       ["uint256", "uint256", "uint256", "address"],
       raw,
     );
 
     return {
       totalOracles: Number(totalOracles),
-      requestFee: BigInt(requestFee.toString()),
-      modelProposalFee: BigInt(modelProposalFee.toString()),
-      owner: owner,
+      requestFee: new BigNumber(requestFee.toString()),
+      modelProposalFee: new BigNumber(modelProposalFee.toString()),
     } as SystemOverview;
   }
 
@@ -123,46 +130,57 @@ export class ContractCall {
   // ==========================================
 
   static async isModelRegistered(model_owner: string): Promise<boolean> {
-    const raw = await callMirrorNode(
-      await ContractCall.require_contract_id(),
-      "isModelRegistered",
-      new ContractFunctionParameters().addAddress(EvmAddress.fromString(model_owner)),
-    );
+const contractId = await ContractCall.require_contract_id();
+console.log("Contract ID:", contractId);
+
+const ownerAddress =
+  await ContractViewer.getEvmAddress(model_owner);
+
+const raw = await callMirrorNode(
+  await ContractCall.require_contract_id(),
+  "isModelRegistered",
+  ["address"],
+  [ownerAddress],
+);
+
+   
 
     const [result] = AbiCoder.defaultAbiCoder().decode(["bool"], raw);
+    
     return Boolean(result);
   }
 
-  static async getModelFullDetails(model_owner: string): Promise<ModelDetails> {
-    const raw = await callMirrorNode(
-      await ContractCall.require_contract_id(),
-      "getModelFullDetails",
-      new ContractFunctionParameters().addAddress(EvmAddress.fromString(model_owner)),
-    );
+static async getModelFullDetails(model_owner: string): Promise<ModelDetails> {
+  const raw = await callMirrorNode(
+    await ContractCall.require_contract_id(),
+    "getModelFullDetails",
+    ["address"],
+    [(await ContractViewer.getEvmAddress(model_owner)).toString()]
+  );
 
-    const [modelOwner, ipfsRef, reputation, reportCount, exists] =
-      AbiCoder.defaultAbiCoder().decode(
-        ["address", "string", "uint256", "uint256", "bool"],
-        raw,
-      );
+  const [decoded] = AbiCoder.defaultAbiCoder().decode(
+    ["tuple(address modelOwner,string ipfsRef,uint256 reputation,uint256 reportCount,bool exists)"],
+    raw
+  );
 
-    return {
-      modelOwner,
-      ipfsRef,
-      reputation: new BigNumber(reputation.toString()),
-      reportCount: new BigNumber(reportCount.toString()),
-      exists,
-    } as ModelDetails;
-  }
+  return {
+    modelOwner: decoded.modelOwner,
+    ipfsRef: decoded.ipfsRef,
+    reputation: new BigNumber(decoded.reputation.toString()),
+    reportCount: new BigNumber(decoded.reportCount.toString()),
+    exists: decoded.exists,
+  } as ModelDetails;
+}
 
   static async getBatchModelDetails(model_owners: string[]): Promise<ModelDetails[]> {
     const params = new ContractFunctionParameters()
-      .addAddressArray(model_owners.map((a) => EvmAddress.fromString(a)));
+      .addAddressArray(await Promise.all(model_owners.map((a) => ContractViewer.getEvmAddress(a))));
 
     const raw = await callMirrorNode(
       await ContractCall.require_contract_id(),
       "getBatchModelDetails",
-      params,
+      ["address[]"],
+      [model_owners]
     );
 
     return ContractCall.decodeModelDetailsArray(raw);
@@ -176,20 +194,22 @@ export class ContractCall {
     const raw = await callMirrorNode(
       await ContractCall.require_contract_id(),
       "getInquirerFullProfile",
-      new ContractFunctionParameters().addAddress(EvmAddress.fromString(inquirer)),
+      ["address"],
+      [(await ContractViewer.getEvmAddress(inquirer)).toString()]
     );
 
-    const [inquirerAddr, totalRequests, hasActiveRequest, logFiles] =
+
+    const [decoded] =
       AbiCoder.defaultAbiCoder().decode(
-        ["address", "uint256", "bool", "string[]"],
+        ["tuple(address inquirer, uint256 totalRequests, bool hasActiveRequest, string[] logFiles)"],
         raw,
       );
 
     return {
-      inquirer: inquirerAddr,
-      totalRequests: new BigNumber(totalRequests.toString()),
-      hasActiveRequest,
-      logFiles,
+      inquirer: decoded.inquirer,
+      totalRequests: new BigNumber(decoded.totalRequests.toString()),
+      hasActiveRequest: decoded.hasActiveRequest,
+      logFiles: decoded.logFiles,
     } as InquirerDetails;
   }
 
@@ -198,35 +218,33 @@ export class ContractCall {
     offset: number,
     limit: number,
   ): Promise<{ paginatedRequests: string[]; total: BigNumber }> {
-    const params = new ContractFunctionParameters()
-      .addAddress(EvmAddress.fromString(inquirer))
-      .addUint256(offset)
-      .addUint256(limit);
 
     const raw = await callMirrorNode(
       await ContractCall.require_contract_id(),
       "getPaginatedInquirerRequests",
-      params,
+      ["address", "uint256" , "uint256"],
+      [await ContractViewer.getEvmAddress(inquirer), offset, limit]
     );
 
-    const [paginatedRequests, total] = AbiCoder.defaultAbiCoder().decode(
+    const [paginated_req , total] = AbiCoder.defaultAbiCoder().decode(
       ["string[]", "uint256"],
       raw,
     );
 
+
     return {
-      paginatedRequests,
-      total: new BigNumber(total.toString()),
+      paginatedRequests : paginated_req,
+      total: new BigNumber(total),
     };
   }
 
   static async getBatchLogFileReputations(hfs_refs: string[]): Promise<bigint[]> {
-    const params = new ContractFunctionParameters().addStringArray(hfs_refs);
 
     const raw = await callMirrorNode(
       await ContractCall.require_contract_id(),
       "getBatchLogFileReputations",
-      params,
+      ["string[]"],
+      hfs_refs
     );
 
     const [reputations] = AbiCoder.defaultAbiCoder().decode(["uint256[]"], raw);
@@ -242,28 +260,24 @@ export class ContractCall {
     offset: number,
     limit: number,
   ): Promise<{ paginatedReports: ModelReport[]; total: number }> {
-    const params = new ContractFunctionParameters()
-      .addAddress(EvmAddress.fromString(model_owner))
-      .addUint256(offset)
-      .addUint256(limit);
 
     const raw = await callMirrorNode(
       await ContractCall.require_contract_id(),
       "getPaginatedModelReports",
-      params,
+      ["address", "uint256" , "uint256"],
+      [model_owner , offset , limit]
     );
 
+    const [model_reports , total] = AbiCoder.defaultAbiCoder().decode(
+      [
+        "tuple(address inquirer, string hfs_ref_report)",
+        "uint256"
+    ] , raw
+    )
+
     return {
-      paginatedReports: ContractCall.decodeModelReportArray(raw),
-      total: Number(
-        AbiCoder.defaultAbiCoder().decode(
-          [
-            "tuple(address inquirer, string hfs_ref_report)[]",
-            "uint256",
-          ],
-          raw,
-        )[1],
-      ),
+      paginatedReports: model_reports,
+      total: total
     };
   }
 
@@ -275,14 +289,12 @@ export class ContractCall {
     offset: number,
     limit: number,
   ): Promise<{ paginatedOracles: string[]; total: BigNumber }> {
-    const params = new ContractFunctionParameters()
-      .addUint256(offset)
-      .addUint256(limit);
 
     const raw = await callMirrorNode(
       await ContractCall.require_contract_id(),
       "getPaginatedOracles",
-      params,
+      ["uint256" , "uint256"],
+      [offset , limit],
     );
 
     const [paginatedOracles, total] = AbiCoder.defaultAbiCoder().decode(
@@ -297,13 +309,14 @@ export class ContractCall {
   }
 
   static async getBatchOracleStatus(candidates: string[]): Promise<boolean[]> {
-    const params = new ContractFunctionParameters();
-    params.addAddressArray(candidates.map((a) => EvmAddress.fromString(a)));
 
     const raw = await callMirrorNode(
       await ContractCall.require_contract_id(),
       "getBatchOracleStatus",
-      params,
+      ["address[]"],
+      [await Promise.all(
+        candidates.map((candidate) => ContractViewer.getEvmAddress(candidate)),
+      )]
     );
 
     const [statuses] = AbiCoder.defaultAbiCoder().decode(["bool[]"], raw);

@@ -9,8 +9,7 @@ export interface owner_contract {
 export interface SystemOverview{
     totalOracles : number;
     requestFee: BigNumber
-    modelProposalFee: BigNumber,
-    owner: string
+    modelProposalFee: BigNumber
 }
 
 export interface ModelDetails {

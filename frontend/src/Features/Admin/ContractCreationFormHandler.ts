@@ -8,6 +8,7 @@ import {
     Signer,
     Long
 } from "@hiero-ledger/sdk";
+import {SaveContractId} from "./../../HashGraphUtils/api"
 
 import { bytecode } from "../../../../hashgraph/out/Entry.sol/Entry.json";
 
@@ -111,7 +112,7 @@ export async function HandleForm(
 
     console.log("========== CONTRACT DEPLOYED ==========");
     console.log("Contract ID:", contractId.toString());
-
+    SaveContractId(signer.getAccountId().toString() , contractId.toString());
     return {
         contractId: contractId.toString(),
         fileId: fileId.toString(),

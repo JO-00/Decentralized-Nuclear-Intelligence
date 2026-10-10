@@ -62,6 +62,30 @@ abstract contract Register is IRegister, BaseContract {
         return true;
 
     }
+    function ApplyAsOracle() external payable {
+        uint256 fee = 80; // 80 tinybars
+
+        require(
+            msg.value >= fee,
+            string.concat(
+                "To become an oracle, provide ",
+                uint256(80).toString(),
+                " tinybars"
+            )
+        );
+
+        require(!isOracle[msg.sender], "Already an oracle");
+
+        isOracle[msg.sender] = true;
+
+        // Refund any excess
+        uint256 excess = msg.value - fee;
+        if (excess > 0) {
+            (bool ok, ) = payable(msg.sender).call{value: excess}("");
+            require(ok, "Refund failed");
+        }
+
+    }
 
     
 }

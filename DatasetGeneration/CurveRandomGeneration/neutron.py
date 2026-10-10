@@ -64,6 +64,6 @@ def generate_neutron_flux_curve(
 
     noisy_flux = perfect_flux + noise
 
-    return perfect_flux , noisy_flux
+    return perfect_flux / 1e12 , noisy_flux / 1e12
 
 
