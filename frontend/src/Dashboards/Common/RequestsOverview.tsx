@@ -110,6 +110,9 @@ export function RequestsOverview() {
       setResponding(false);
     }
   };
+  function checkSubmit(event: string) {
+    handleFetchProfile();
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -123,6 +126,7 @@ export function RequestsOverview() {
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
+            onKeyDown={(event) => checkSubmit(event.key)}
             placeholder="Inquirer address"
             className="flex-1 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40"
           />
