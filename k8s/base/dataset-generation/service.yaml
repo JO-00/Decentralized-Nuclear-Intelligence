@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataset-generation
+  labels:
+    app.kubernetes.io/name: dataset-generation
+    app.kubernetes.io/part-of: nuclear-safety-platform
+    app.kubernetes.io/component: telemetry-backend
+spec:
+  type: ClusterIP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  ports:
+    - name: http-api
+      port: 8000
+      targetPort: http-api
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: dataset-generation

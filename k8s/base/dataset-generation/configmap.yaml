@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dataset-generation-config
+  labels:
+    app.kubernetes.io/name: dataset-generation
+data:
+  MPLCONFIGDIR: "/tmp/matplotlib"
+  XDG_CACHE_HOME: "/tmp/.cache"
+  DATASET_OUTPUT_DIR: "/tmp"
+  PORT: "8000"
