@@ -1,0 +1,13 @@
+# Minikube Local Host Resolution
+#
+# To route traffic to your tenant Ingress resources, map your Minikube IP
+# to the tenant domain names in your hosts file:
+#
+# Windows: C:\Windows\System32\drivers\etc\hosts
+# Linux/macOS: /etc/hosts
+#
+# Format:
+# <MINIKUBE_IP> alpha.nuclear.local beta.nuclear.local
+#
+# Example (replace 192.168.49.2 with `minikube ip`):
+# 192.168.49.2 alpha.nuclear.local beta.nuclear.local

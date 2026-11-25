@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-beta
+  labels:
+    name: tenant-beta
+    kubernetes.io/metadata.name: tenant-beta
+    nuclear.io/tenant: beta
+    nuclear.io/environment: staging
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
