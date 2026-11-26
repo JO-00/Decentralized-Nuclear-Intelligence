@@ -1,0 +1,159 @@
+name: Kubernetes CI/CD & Multi-Tenant Network Verification
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "k8s/**"
+      - "DatasetGeneration/**"
+      - "frontend/**"
+      - ".github/workflows/k8s-ci-cd.yaml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "k8s/**"
+      - "DatasetGeneration/**"
+      - "frontend/**"
+      - ".github/workflows/k8s-ci-cd.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-validate:
+    name: Lint & Schema Validation (Kubeconform)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Kubeconform
+        uses: yannh/kubeconform-action@v0.0.8
+        with:
+          k8s_version: "v1.30.0"
+
+      - name: Validate Kustomize Build & Schema (Tenant Alpha)
+        run: |
+          kubectl kustomize k8s/overlays/tenant-alpha > /tmp/tenant-alpha-rendered.yaml
+          kubeconform -summary -strict -kubernetes-version 1.30.0 -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' /tmp/tenant-alpha-rendered.yaml
+
+      - name: Validate Kustomize Build & Schema (Tenant Beta)
+        run: |
+          kubectl kustomize k8s/overlays/tenant-beta > /tmp/tenant-beta-rendered.yaml
+          kubeconform -summary -strict -kubernetes-version 1.30.0 -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' /tmp/tenant-beta-rendered.yaml
+
+      - name: Validate Minikube Aggregate Overlay
+        run: |
+          kubectl kustomize k8s/overlays/minikube > /tmp/minikube-rendered.yaml
+          kubeconform -summary -strict -kubernetes-version 1.30.0 -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' /tmp/minikube-rendered.yaml
+
+  docker-build-and-scan:
+    name: Build & Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Dataset Generation Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./DatasetGeneration
+          file: ./DatasetGeneration/Dockerfile
+          load: true
+          tags: nuclear-dataset-generation:ci
+
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          load: true
+          tags: nuclear-frontend:ci
+
+      - name: Run Trivy Vulnerability Scanner (Dataset Generation)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "nuclear-dataset-generation:ci"
+          format: "table"
+          exit-code: "0"
+          severity: "CRITICAL,HIGH"
+
+  e2e-minikube-network-test:
+    name: Minikube E2E & Network Policy Verification
+    needs: [lint-and-validate, docker-build-and-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Start Minikube with Calico CNI & Addons
+        uses: medyagh/setup-minikube@master
+        with:
+          minikube-version: 1.33.1
+          k8s-version: v1.30.0
+          cni: calico
+          addons: ingress,metrics-server
+
+      - name: Build Images inside Minikube Docker Daemon
+        run: |
+          eval $(minikube docker-env)
+          docker build -t nuclear-dataset-generation:latest ./DatasetGeneration
+          docker build -t nuclear-frontend:latest ./frontend
+
+      - name: Deploy Overlays via Kustomize
+        run: |
+          kubectl apply -k k8s/overlays/minikube
+
+      - name: Verify Tenant Alpha Rollout
+        run: |
+          kubectl rollout status deployment/dataset-generation -n tenant-alpha --timeout=180s
+          kubectl rollout status deployment/frontend -n tenant-alpha --timeout=180s
+
+      - name: Verify Tenant Beta Rollout
+        run: |
+          kubectl rollout status deployment/dataset-generation -n tenant-beta --timeout=180s
+          kubectl rollout status deployment/frontend -n tenant-beta --timeout=180s
+
+      - name: Validate Ingress L7 Routing & Health Endpoints
+        run: |
+          MINIKUBE_IP=$(minikube ip)
+          echo "Minikube Ingress Gateway IP: $MINIKUBE_IP"
+          
+          # Poll until Ingress Controller registers backends (up to 60s)
+          for i in {1..12}; do
+            STATUS_ALPHA=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: alpha.nuclear.local" http://${MINIKUBE_IP}/api/health || true)
+            STATUS_BETA=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: beta.nuclear.local" http://${MINIKUBE_IP}/api/health || true)
+            echo "Attempt $i: Tenant Alpha HTTP $STATUS_ALPHA | Tenant Beta HTTP $STATUS_BETA"
+            if [ "$STATUS_ALPHA" = "200" ] && [ "$STATUS_BETA" = "200" ]; then
+              echo "Both tenant endpoints returned HTTP 200 OK!"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Warning: Ingress endpoints did not return 200 in CI time window, dumping logs:"
+          kubectl get pods,svc,ingress -A
+          exit 1
+
+      - name: Verify Zero-Trust Network Policy Isolation (Cross-Tenant Blocked)
+        run: |
+          echo "Testing inter-tenant network isolation between tenant-alpha and tenant-beta..."
+          # Attempt to reach tenant-beta's internal service from a probe pod in tenant-alpha
+          kubectl run -n tenant-alpha cross-tenant-probe --image=curlimages/curl --restart=Never --command -- sleep 3600
+          kubectl wait -n tenant-alpha --for=condition=ready pod/cross-tenant-probe --timeout=60s
+          
+          # This connection should FAIL (timeout) due to default-deny NetworkPolicy
+          set +e
+          kubectl exec -n tenant-alpha cross-tenant-probe -- curl -s -m 3 http://dataset-generation.tenant-beta.svc.cluster.local:8000/health
+          CURL_EXIT=$?
+          set -e
+          
+          if [ $CURL_EXIT -ne 0 ]; then
+            echo "[PASS] Cross-tenant traffic is strictly blocked by NetworkPolicy as expected."
+          else
+            echo "[FAIL] Cross-tenant traffic succeeded; NetworkPolicy isolation violation!"
+            exit 1
+          fi
